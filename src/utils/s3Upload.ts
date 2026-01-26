@@ -306,7 +306,7 @@ export async function listUserFiles(userId: string): Promise<{ success: boolean;
       .filter(obj => obj.Key && obj.Size && obj.Size > 0) // Filter out folders
       .map(obj => {
         const key = obj.Key!;
-        const url = getPublicUrl(key);
+        const url = getPublicUrl(config.bucket, config.region, key);
         
         // Determine file type from path
         let type: 'image' | 'video' | 'audio' = 'image';
