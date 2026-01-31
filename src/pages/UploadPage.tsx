@@ -6,7 +6,7 @@ import { MediaUploader } from '../components/MediaUploader';
 import { SlideshowEditor, type SlideItem } from '../components/SlideshowEditor';
 import { TemplateSelector, type SlideshowTemplate } from '../components/TemplateSelector';
 import { AudioManager } from '../components/AudioManager';
-import { listUserFiles, deleteFromS3 } from '../utils/s3Upload';
+import { listUserFiles, deleteFromS3, saveCaptionsToS3, loadCaptionsFromS3 } from '../utils/s3Upload';
 import { ArrowLeft, Play, LogOut, Heart, Image as ImageIcon, Download, Share2, Settings } from 'lucide-react';
 interface AudioTrack {
   id: string;
@@ -44,8 +44,28 @@ export function UploadPage() {
       };
       localStorage.setItem('slideshow_config', JSON.stringify(config));
       console.log('💾 Saved', slides.length, 'slides to slideshow_config with captions');
+      
+      // Also save captions to S3 as a JSON file
+      if (user?.email) {
+        const captions: Record<string, string> = {};
+        slides.forEach(slide => {
+          if (slide.s3Key && slide.caption) {
+            captions[slide.s3Key] = slide.caption;
+          }
+        });
+        
+        if (Object.keys(captions).length > 0) {
+          saveCaptionsToS3(user.email, captions).then(result => {
+            if (result.success) {
+              console.log('✅ Captions synced to S3');
+            } else {
+              console.warn('⚠️ Failed to sync captions to S3:', result.error);
+            }
+          });
+        }
+      }
     }
-  }, [slides, selectedTemplate, audioTracks]);
+  }, [slides, selectedTemplate, audioTracks, user?.email]);
 
   // Load user's existing files on mount
   useEffect(() => {
@@ -56,12 +76,40 @@ export function UploadPage() {
       localStorage.removeItem('memorial_media');
       
       setLoadingFiles(true);
+      
+      // Load captions from S3
+      const captionsResult = await loadCaptionsFromS3(user.email);
+      const s3Captions = captionsResult.success && captionsResult.captions ? captionsResult.captions : {};
+      
+      // Also check localStorage for any newer captions
+      const savedConfig = localStorage.getItem('slideshow_config');
+      let localCaptions: Record<string, string> = {};
+      
+      if (savedConfig) {
+        try {
+          const config = JSON.parse(savedConfig);
+          if (config.slides && Array.isArray(config.slides)) {
+            config.slides.forEach((slide: any) => {
+              if (slide.s3Key && slide.caption) {
+                localCaptions[slide.s3Key] = slide.caption;
+              }
+            });
+          }
+        } catch (error) {
+          console.error('Error parsing slideshow_config:', error);
+        }
+      }
+      
+      // Merge captions: localStorage takes precedence over S3
+      const allCaptions = { ...s3Captions, ...localCaptions };
+      console.log('📝 Loaded captions:', Object.keys(s3Captions).length, 'from S3,', Object.keys(localCaptions).length, 'from localStorage');
+      
       const result = await listUserFiles(user.email);
       
       if (result.success && result.files) {
         console.log('📂 Loaded', result.files.length, 'existing files from S3');
         
-        // Convert S3 files to slides with captions from metadata
+        // Convert S3 files to slides with captions
         const existingSlides: SlideItem[] = result.files
           .filter(f => f.type === 'image' || f.type === 'video')
           .map(file => ({
@@ -69,7 +117,7 @@ export function UploadPage() {
             type: file.type === 'video' ? 'video' : 'image',
             url: file.url,
             thumbnail: file.url,
-            caption: file.caption || '',
+            caption: allCaptions[file.key] || '',
             duration: 5,
             transition: 'fade' as const,
             s3Key: file.key // Store S3 key for deletion
@@ -78,6 +126,10 @@ export function UploadPage() {
         console.log('📊 Setting slides to:', existingSlides.length, 'items');
         setSlides(existingSlides);
         setUploadCount(result.files.length);
+        
+        if (Object.keys(allCaptions).length > 0) {
+          console.log('✅ Loaded', Object.keys(allCaptions).length, 'captions total');
+        }
       } else {
         console.log('📂 No files found, starting fresh');
         setSlides([]);

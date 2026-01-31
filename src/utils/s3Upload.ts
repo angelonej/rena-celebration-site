@@ -382,8 +382,87 @@ export async function deleteFromS3(key: string): Promise<{ success: boolean; err
 }
 
 /**
+ * Save captions to S3 as a JSON file
+ * This avoids CORS issues with CopyObject by using simple PutObject
+ */
+export async function saveCaptionsToS3(userId: string, captions: Record<string, string>): Promise<{ success: boolean; error?: string }> {
+  try {
+    console.log('💾 Saving captions file to S3 for user:', userId);
+    
+    const s3Client = getS3Client();
+    const config = getS3Config();
+    const sanitizedUserId = sanitizeUserId(userId);
+    
+    // Save captions as a JSON file in user's folder
+    const captionsKey = `users/${sanitizedUserId}/captions.json`;
+    const captionsData = JSON.stringify(captions, null, 2);
+    
+    const upload = new Upload({
+      client: s3Client,
+      params: {
+        Bucket: config.bucket,
+        Key: captionsKey,
+        Body: captionsData,
+        ContentType: 'application/json',
+      },
+    });
+    
+    await upload.done();
+    
+    console.log('✅ Captions saved to S3 successfully');
+    return { success: true };
+    
+  } catch (error) {
+    console.error('❌ Error saving captions:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to save captions',
+    };
+  }
+}
+
+/**
+ * Load captions from S3 JSON file
+ */
+export async function loadCaptionsFromS3(userId: string): Promise<{ success: boolean; captions?: Record<string, string>; error?: string }> {
+  try {
+    console.log('📖 Loading captions from S3 for user:', userId);
+    
+    const config = getS3Config();
+    const sanitizedUserId = sanitizeUserId(userId);
+    
+    const captionsKey = `users/${sanitizedUserId}/captions.json`;
+    const url = getPublicUrl(config.bucket, config.region, captionsKey);
+    
+    // Fetch the captions file
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        console.log('📝 No captions file found (this is normal for new users)');
+        return { success: true, captions: {} };
+      }
+      throw new Error(`Failed to fetch captions: ${response.statusText}`);
+    }
+    
+    const captions = await response.json();
+    console.log('✅ Loaded', Object.keys(captions).length, 'captions from S3');
+    
+    return { success: true, captions };
+    
+  } catch (error) {
+    console.error('❌ Error loading captions:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to load captions',
+    };
+  }
+}
+
+/**
  * Update caption for an existing S3 object
  * Uses CopyObject to update metadata without re-uploading the file
+ * NOTE: This approach has CORS issues in browsers, use saveCaptionsToS3 instead
  */
 export async function updateS3Caption(key: string, caption: string): Promise<{ success: boolean; error?: string }> {
   try {
@@ -424,4 +503,42 @@ export async function updateS3Caption(key: string, caption: string): Promise<{ s
       error: error instanceof Error ? error.message : 'Failed to update caption',
     };
   }
+}
+
+/**
+ * Batch update captions for multiple S3 objects
+ * Used to sync captions from localStorage to S3
+ */
+export async function syncCaptionsToS3(captionMap: Record<string, string>): Promise<{ 
+  success: boolean; 
+  updatedCount: number;
+  failedCount: number;
+  errors?: string[];
+}> {
+  console.log('🔄 Syncing', Object.keys(captionMap).length, 'captions to S3...');
+  
+  let updatedCount = 0;
+  let failedCount = 0;
+  const errors: string[] = [];
+  
+  for (const [key, caption] of Object.entries(captionMap)) {
+    const result = await updateS3Caption(key, caption);
+    if (result.success) {
+      updatedCount++;
+    } else {
+      failedCount++;
+      if (result.error) {
+        errors.push(`${key}: ${result.error}`);
+      }
+    }
+  }
+  
+  console.log(`✅ Sync complete: ${updatedCount} updated, ${failedCount} failed`);
+  
+  return {
+    success: failedCount === 0,
+    updatedCount,
+    failedCount,
+    errors: errors.length > 0 ? errors : undefined,
+  };
 }
