@@ -6,7 +6,7 @@ import { MediaUploader } from '../components/MediaUploader';
 import { SlideshowEditor, type SlideItem } from '../components/SlideshowEditor';
 import { TemplateSelector, type SlideshowTemplate } from '../components/TemplateSelector';
 import { AudioManager } from '../components/AudioManager';
-import { listUserFiles, deleteFromS3, updateS3Caption } from '../utils/s3Upload';
+import { listUserFiles, deleteFromS3 } from '../utils/s3Upload';
 import { ArrowLeft, Play, LogOut, Heart, Image as ImageIcon, Download, Share2, Settings } from 'lucide-react';
 interface AudioTrack {
   id: string;
@@ -32,7 +32,7 @@ export function UploadPage() {
   // Debug: Log whenever slides changes
   useEffect(() => {
     console.log('🎬 SLIDES STATE CHANGED:', slides.length, 'slides');
-    slides.forEach((s, i) => console.log(`  ${i+1}. ${s.s3Key || s.id}`));
+    slides.forEach((s, i) => console.log(`  ${i+1}. ${s.s3Key || s.id} - Caption: "${s.caption}"`));
     
     // Auto-save slides to slideshow_config for slideshow page
     if (slides.length > 0) {
@@ -43,7 +43,7 @@ export function UploadPage() {
         createdAt: new Date().toISOString()
       };
       localStorage.setItem('slideshow_config', JSON.stringify(config));
-      console.log('💾 Saved', slides.length, 'slides to slideshow_config');
+      console.log('💾 Saved', slides.length, 'slides to slideshow_config with captions');
     }
   }, [slides, selectedTemplate, audioTracks]);
 
@@ -271,33 +271,17 @@ export function UploadPage() {
 
             {activeTab === 'arrange' && <div className="bg-white/40 backdrop-blur-sm rounded-2xl p-6 md:p-8 border border-white/50">
                 <SlideshowEditor slides={slides} onReorder={setSlides} onUpdateSlide={async (id, updates) => {
-              console.log('📝 Updating slide:', id, updates);
+              console.log('📝 Updating slide:', id, 'Updates:', updates);
               
-              // Find the slide being updated
-              const slideToUpdate = slides.find(s => s.id === id);
-              
-              // If caption is being updated and slide has S3 key, update in S3
-              if (updates.caption !== undefined && slideToUpdate?.s3Key) {
-                console.log('💾 Saving caption to S3:', updates.caption);
-                try {
-                  const result = await updateS3Caption(slideToUpdate.s3Key, updates.caption);
-                  if (!result.success) {
-                    console.error('Failed to update caption in S3:', result.error);
-                    // Continue with local update even if S3 fails
-                  } else {
-                    console.log('✅ Caption saved to S3 successfully');
-                  }
-                } catch (error) {
-                  console.error('Error updating caption in S3:', error);
-                  // Continue with local update even if S3 fails
-                }
-              }
-              
-              // Update local state
+              // Update local state immediately for responsiveness
               setSlides(prev => prev.map(s => s.id === id ? {
                 ...s,
                 ...updates
               } : s));
+              
+              // Note: S3 metadata updates disabled due to CORS complexity with CopyObject
+              // Captions are persisted in localStorage and will be included in slideshow
+              console.log('💾 Caption saved to localStorage (will be in slideshow)');
             }} onRemoveSlide={async (id) => {
               console.log('🗑️  Removing slide:', id);
               const slideToDelete = slides.find(s => s.id === id);

@@ -6,13 +6,14 @@
       "AllowedOrigins": [
         "http://localhost:5173",
         "http://localhost:5174",
+        "http://localhost:5175",
         "http://localhost:3000",
         "http://rena-celebration-site.s3-website.us-east-2.amazonaws.com",
         "https://staging.d36hni37l0nf88.amplifyapp.com",
         "https://main.d36hni37l0nf88.amplifyapp.com",
         "https://d36hni37l0nf88.amplifyapp.com"
       ],
-      "ExposeHeaders": ["ETag", "x-amz-request-id"],
+      "ExposeHeaders": ["ETag", "x-amz-request-id", "x-amz-copy-source-version-id"],
       "MaxAgeSeconds": 3000
     }
   ]

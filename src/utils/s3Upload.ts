@@ -323,6 +323,7 @@ export async function listUserFiles(userId: string): Promise<{ success: boolean;
           });
           const headResponse = await s3Client.send(headCommand);
           caption = headResponse.Metadata?.caption || '';
+          console.log('📝 Fetched metadata for', key, '- Caption:', caption);
         } catch (error) {
           console.warn('⚠️ Could not fetch metadata for', key, error);
         }
