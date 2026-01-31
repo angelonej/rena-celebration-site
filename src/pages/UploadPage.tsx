@@ -7,6 +7,7 @@ import { SlideshowEditor, type SlideItem } from '../components/SlideshowEditor';
 import { TemplateSelector, type SlideshowTemplate } from '../components/TemplateSelector';
 import { AudioManager } from '../components/AudioManager';
 import { listUserFiles, deleteFromS3, saveCaptionsToS3, loadCaptionsFromS3, loadDeletedFilesFromS3 } from '../utils/s3Upload';
+import { sanitizeUserId } from '../utils/s3Config';
 import { ArrowLeft, Play, LogOut, Heart, Image as ImageIcon, Download, Share2, Settings } from 'lucide-react';
 interface AudioTrack {
   id: string;
@@ -104,10 +105,11 @@ export function UploadPage() {
       const allCaptions = { ...s3Captions, ...localCaptions };
       console.log('📝 Loaded captions:', Object.keys(s3Captions).length, 'from S3,', Object.keys(localCaptions).length, 'from localStorage');
       
-      // Load list of deleted files to filter them out
-      const deletedResult = await loadDeletedFilesFromS3(user.email);
+      // Load list of deleted files to filter them out (use sanitized userId to match admin deletions)
+      const sanitizedUserId = sanitizeUserId(user.email);
+      const deletedResult = await loadDeletedFilesFromS3(sanitizedUserId);
       const deletedKeys = deletedResult.success && deletedResult.deletedKeys ? deletedResult.deletedKeys : [];
-      console.log('🗑️ Loaded', deletedKeys.length, 'deleted file keys from S3');
+      console.log('🗑️ Loaded', deletedKeys.length, 'deleted file keys from S3 for user:', sanitizedUserId);
       
       const result = await listUserFiles(user.email);
       
