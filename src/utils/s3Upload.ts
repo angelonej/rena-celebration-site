@@ -422,6 +422,82 @@ export async function saveCaptionsToS3(userId: string, captions: Record<string, 
 }
 
 /**
+ * Save deleted files list to S3 JSON file
+ */
+export async function saveDeletedFilesToS3(userId: string, deletedKeys: string[]): Promise<{ success: boolean; error?: string }> {
+  try {
+    console.log('🗑️ Saving deleted files list to S3 for user:', userId);
+    
+    const s3Client = getS3Client();
+    const config = getS3Config();
+    const sanitizedUserId = sanitizeUserId(userId);
+    
+    const deletedKey = `users/${sanitizedUserId}/deleted.json`;
+    const deletedData = JSON.stringify(deletedKeys);
+    
+    const upload = new Upload({
+      client: s3Client,
+      params: {
+        Bucket: config.bucket,
+        Key: deletedKey,
+        Body: deletedData,
+        ContentType: 'application/json',
+      },
+    });
+    
+    await upload.done();
+    
+    console.log('✅ Deleted files list saved to S3 successfully');
+    return { success: true };
+    
+  } catch (error) {
+    console.error('❌ Error saving deleted files list:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to save deleted files list',
+    };
+  }
+}
+
+/**
+ * Load deleted files list from S3 JSON file
+ */
+export async function loadDeletedFilesFromS3(userId: string): Promise<{ success: boolean; deletedKeys?: string[]; error?: string }> {
+  try {
+    console.log('🗑️ Loading deleted files list from S3 for user:', userId);
+    
+    const config = getS3Config();
+    const sanitizedUserId = sanitizeUserId(userId);
+    
+    const deletedKey = `users/${sanitizedUserId}/deleted.json`;
+    const url = getPublicUrl(config.bucket, config.region, deletedKey);
+    
+    // Fetch the deleted files list
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        console.log('🗑️ No deleted files list found (this is normal)');
+        return { success: true, deletedKeys: [] };
+      }
+      throw new Error(`Failed to fetch deleted files: ${response.statusText}`);
+    }
+    
+    const deletedKeys = await response.json();
+    console.log('✅ Loaded', deletedKeys.length, 'deleted file keys from S3');
+    
+    return { success: true, deletedKeys };
+    
+  } catch (error) {
+    console.error('❌ Error loading deleted files list:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to load deleted files list',
+    };
+  }
+}
+
+/**
  * Load captions from S3 JSON file
  */
 export async function loadCaptionsFromS3(userId: string): Promise<{ success: boolean; captions?: Record<string, string>; error?: string }> {

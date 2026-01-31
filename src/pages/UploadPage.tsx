@@ -6,7 +6,7 @@ import { MediaUploader } from '../components/MediaUploader';
 import { SlideshowEditor, type SlideItem } from '../components/SlideshowEditor';
 import { TemplateSelector, type SlideshowTemplate } from '../components/TemplateSelector';
 import { AudioManager } from '../components/AudioManager';
-import { listUserFiles, deleteFromS3, saveCaptionsToS3, loadCaptionsFromS3 } from '../utils/s3Upload';
+import { listUserFiles, deleteFromS3, saveCaptionsToS3, loadCaptionsFromS3, loadDeletedFilesFromS3 } from '../utils/s3Upload';
 import { ArrowLeft, Play, LogOut, Heart, Image as ImageIcon, Download, Share2, Settings } from 'lucide-react';
 interface AudioTrack {
   id: string;
@@ -104,14 +104,19 @@ export function UploadPage() {
       const allCaptions = { ...s3Captions, ...localCaptions };
       console.log('📝 Loaded captions:', Object.keys(s3Captions).length, 'from S3,', Object.keys(localCaptions).length, 'from localStorage');
       
+      // Load list of deleted files to filter them out
+      const deletedResult = await loadDeletedFilesFromS3(user.email);
+      const deletedKeys = deletedResult.success && deletedResult.deletedKeys ? deletedResult.deletedKeys : [];
+      console.log('🗑️ Loaded', deletedKeys.length, 'deleted file keys from S3');
+      
       const result = await listUserFiles(user.email);
       
       if (result.success && result.files) {
         console.log('📂 Loaded', result.files.length, 'existing files from S3');
         
-        // Convert S3 files to slides with captions
+        // Convert S3 files to slides with captions, filtering out deleted files
         const existingSlides: SlideItem[] = result.files
-          .filter(f => f.type === 'image' || f.type === 'video')
+          .filter(f => (f.type === 'image' || f.type === 'video') && !deletedKeys.includes(f.key))
           .map(file => ({
             id: file.key,
             type: file.type === 'video' ? 'video' : 'image',
