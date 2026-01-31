@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Check, X, Eye, Users, Image as ImageIcon, Clock, Loader, Folder, Trash2, Play } from 'lucide-react';
-import { listAllUsersFiles, loadCaptionsFromS3, deleteFromS3, type S3File } from '../utils/s3Upload';
+import { listAllUsersFiles, loadCaptionsFromS3, deleteFromS3, loadDeletedFilesFromS3, saveDeletedFilesToS3, type S3File } from '../utils/s3Upload';
 import { useNavigate } from 'react-router-dom';
 
 interface UserMedia {
