@@ -304,7 +304,14 @@ export async function listUserFiles(userId: string): Promise<{ success: boolean;
     
     // Convert S3 objects to file info and fetch metadata (including captions)
     const filePromises = response.Contents
-      .filter(obj => obj.Key && obj.Size && obj.Size > 0) // Filter out folders
+      .filter(obj => {
+        if (!obj.Key || !obj.Size || obj.Size === 0) return false; // Filter out folders and empty files
+        // Filter out JSON metadata files
+        if (obj.Key.endsWith('.json')) return false;
+        // Only include image and video files
+        const key = obj.Key.toLowerCase();
+        return key.includes('/images/') || key.includes('/videos/');
+      })
       .map(async (obj) => {
         const key = obj.Key!;
         const url = getPublicUrl(config.bucket, config.region, key);
