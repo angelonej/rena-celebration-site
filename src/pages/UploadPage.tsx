@@ -6,7 +6,7 @@ import { MediaUploader } from '../components/MediaUploader';
 import { SlideshowEditor, type SlideItem } from '../components/SlideshowEditor';
 import { TemplateSelector, type SlideshowTemplate } from '../components/TemplateSelector';
 import { AudioManager } from '../components/AudioManager';
-import { listUserFiles, deleteFromS3 } from '../utils/s3Upload';
+import { listUserFiles, deleteFromS3, updateS3Caption } from '../utils/s3Upload';
 import { ArrowLeft, Play, LogOut, Heart, Image as ImageIcon, Download, Share2, Settings } from 'lucide-react';
 interface AudioTrack {
   id: string;
@@ -61,7 +61,7 @@ export function UploadPage() {
       if (result.success && result.files) {
         console.log('📂 Loaded', result.files.length, 'existing files from S3');
         
-        // Convert S3 files to slides
+        // Convert S3 files to slides with captions from metadata
         const existingSlides: SlideItem[] = result.files
           .filter(f => f.type === 'image' || f.type === 'video')
           .map(file => ({
@@ -69,7 +69,7 @@ export function UploadPage() {
             type: file.type === 'video' ? 'video' : 'image',
             url: file.url,
             thumbnail: file.url,
-            caption: '',
+            caption: file.caption || '',
             duration: 5,
             transition: 'fade' as const,
             s3Key: file.key // Store S3 key for deletion
@@ -270,7 +270,30 @@ export function UploadPage() {
               </div>}
 
             {activeTab === 'arrange' && <div className="bg-white/40 backdrop-blur-sm rounded-2xl p-6 md:p-8 border border-white/50">
-                <SlideshowEditor slides={slides} onReorder={setSlides} onUpdateSlide={(id, updates) => {
+                <SlideshowEditor slides={slides} onReorder={setSlides} onUpdateSlide={async (id, updates) => {
+              console.log('📝 Updating slide:', id, updates);
+              
+              // Find the slide being updated
+              const slideToUpdate = slides.find(s => s.id === id);
+              
+              // If caption is being updated and slide has S3 key, update in S3
+              if (updates.caption !== undefined && slideToUpdate?.s3Key) {
+                console.log('💾 Saving caption to S3:', updates.caption);
+                try {
+                  const result = await updateS3Caption(slideToUpdate.s3Key, updates.caption);
+                  if (!result.success) {
+                    console.error('Failed to update caption in S3:', result.error);
+                    // Continue with local update even if S3 fails
+                  } else {
+                    console.log('✅ Caption saved to S3 successfully');
+                  }
+                } catch (error) {
+                  console.error('Error updating caption in S3:', error);
+                  // Continue with local update even if S3 fails
+                }
+              }
+              
+              // Update local state
               setSlides(prev => prev.map(s => s.id === id ? {
                 ...s,
                 ...updates

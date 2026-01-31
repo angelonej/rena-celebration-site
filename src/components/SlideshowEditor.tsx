@@ -24,6 +24,7 @@ export function SlideshowEditor({
   onRemoveSlide
 }: SlideshowEditorProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [tempCaption, setTempCaption] = useState<string>('');
   const totalDuration = slides.reduce((sum, slide) => sum + slide.duration, 0);
   const getIcon = (type: string) => {
     switch (type) {
@@ -80,10 +81,26 @@ export function SlideshowEditor({
                   {/* Details */}
                   <div className="flex-1 min-w-0">
                     {editingId === slide.id ? <div className="space-y-2">
-                        <input type="text" value={slide.caption} onChange={e => onUpdateSlide(slide.id, {
-                  caption: e.target.value
-                })} onBlur={() => setEditingId(null)} autoFocus className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-[var(--sunset-orange)] focus:border-transparent outline-none font-serif" placeholder="Add a caption..." />
-                      </div> : <div onClick={() => setEditingId(slide.id)} className="cursor-text">
+                        <input type="text" value={tempCaption} onChange={e => setTempCaption(e.target.value)} onBlur={() => {
+                  // Save caption when user finishes editing
+                  onUpdateSlide(slide.id, { caption: tempCaption });
+                  setEditingId(null);
+                }} onKeyDown={e => {
+                  // Save on Enter key
+                  if (e.key === 'Enter') {
+                    onUpdateSlide(slide.id, { caption: tempCaption });
+                    setEditingId(null);
+                  }
+                  // Cancel on Escape key
+                  if (e.key === 'Escape') {
+                    setEditingId(null);
+                    setTempCaption(slide.caption);
+                  }
+                }} autoFocus className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-[var(--sunset-orange)] focus:border-transparent outline-none font-serif" placeholder="Add a caption..." />
+                      </div> : <div onClick={() => {
+                setEditingId(slide.id);
+                setTempCaption(slide.caption);
+              }} className="cursor-text">
                         <p className="font-serif text-sm text-gray-800 truncate mb-1">
                           {slide.caption || 'Click to add caption'}
                         </p>

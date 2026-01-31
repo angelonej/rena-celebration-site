@@ -11,7 +11,7 @@
  */
 
 import { Upload } from '@aws-sdk/lib-storage';
-import { ListObjectsV2Command, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { ListObjectsV2Command, DeleteObjectCommand, HeadObjectCommand, CopyObjectCommand } from '@aws-sdk/client-s3';
 import { v4 as uuidv4 } from 'uuid';
 import {
   getS3Client,
@@ -276,6 +276,7 @@ export interface S3File {
   type: 'image' | 'video' | 'audio';
   size: number;
   lastModified: Date;
+  caption?: string;
 }
 
 export async function listUserFiles(userId: string): Promise<{ success: boolean; files?: S3File[]; error?: string }> {
@@ -301,10 +302,10 @@ export async function listUserFiles(userId: string): Promise<{ success: boolean;
       return { success: true, files: [] };
     }
     
-    // Convert S3 objects to file info
-    const files: S3File[] = response.Contents
+    // Convert S3 objects to file info and fetch metadata (including captions)
+    const filePromises = response.Contents
       .filter(obj => obj.Key && obj.Size && obj.Size > 0) // Filter out folders
-      .map(obj => {
+      .map(async (obj) => {
         const key = obj.Key!;
         const url = getPublicUrl(config.bucket, config.region, key);
         
@@ -313,16 +314,32 @@ export async function listUserFiles(userId: string): Promise<{ success: boolean;
         if (key.includes('/videos/')) type = 'video';
         else if (key.includes('/audios/')) type = 'audio';
         
+        // Fetch object metadata to get caption
+        let caption = '';
+        try {
+          const headCommand = new HeadObjectCommand({
+            Bucket: config.bucket,
+            Key: key,
+          });
+          const headResponse = await s3Client.send(headCommand);
+          caption = headResponse.Metadata?.caption || '';
+        } catch (error) {
+          console.warn('⚠️ Could not fetch metadata for', key, error);
+        }
+        
         return {
           key,
           url,
           type,
           size: obj.Size!,
           lastModified: obj.LastModified || new Date(),
+          caption,
         };
       });
     
-    console.log('✅ Found', files.length, 'files');
+    const files = await Promise.all(filePromises);
+    
+    console.log('✅ Found', files.length, 'files with captions');
     return { success: true, files };
     
   } catch (error) {
@@ -359,6 +376,51 @@ export async function deleteFromS3(key: string): Promise<{ success: boolean; err
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to delete file',
+    };
+  }
+}
+
+/**
+ * Update caption for an existing S3 object
+ * Uses CopyObject to update metadata without re-uploading the file
+ */
+export async function updateS3Caption(key: string, caption: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    console.log('✏️ Updating caption for:', key);
+    
+    const s3Client = getS3Client();
+    const config = getS3Config();
+    
+    // First, get the current metadata
+    const headCommand = new HeadObjectCommand({
+      Bucket: config.bucket,
+      Key: key,
+    });
+    const headResponse = await s3Client.send(headCommand);
+    
+    // Copy the object over itself with updated metadata
+    const copyCommand = new CopyObjectCommand({
+      Bucket: config.bucket,
+      Key: key,
+      CopySource: `${config.bucket}/${key}`,
+      Metadata: {
+        ...headResponse.Metadata,
+        caption: caption,
+      },
+      MetadataDirective: 'REPLACE',
+      ContentType: headResponse.ContentType,
+    });
+    
+    await s3Client.send(copyCommand);
+    
+    console.log('✅ Caption updated successfully');
+    return { success: true };
+    
+  } catch (error) {
+    console.error('❌ Error updating caption:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to update caption',
     };
   }
 }
