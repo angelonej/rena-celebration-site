@@ -542,3 +542,83 @@ export async function syncCaptionsToS3(captionMap: Record<string, string>): Prom
     errors: errors.length > 0 ? errors : undefined,
   };
 }
+
+/**
+ * List all user folders in S3 (admin function)
+ * Returns list of user IDs who have uploaded content
+ */
+export async function listAllUsers(): Promise<{ success: boolean; users?: string[]; error?: string }> {
+  try {
+    console.log('👥 Listing all users from S3...');
+    
+    const s3Client = getS3Client();
+    const config = getS3Config();
+    
+    const command = new ListObjectsV2Command({
+      Bucket: config.bucket,
+      Prefix: 'users/',
+      Delimiter: '/',
+    });
+    
+    const response = await s3Client.send(command);
+    
+    if (!response.CommonPrefixes || response.CommonPrefixes.length === 0) {
+      console.log('👥 No users found');
+      return { success: true, users: [] };
+    }
+    
+    // Extract user IDs from folder prefixes
+    const users = response.CommonPrefixes
+      .map(prefix => prefix.Prefix?.replace('users/', '').replace('/', ''))
+      .filter((user): user is string => !!user);
+    
+    console.log('✅ Found', users.length, 'users');
+    return { success: true, users };
+    
+  } catch (error) {
+    console.error('❌ Error listing users:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to list users',
+    };
+  }
+}
+
+/**
+ * List all files for all users (admin function)
+ */
+export async function listAllUsersFiles(): Promise<{ 
+  success: boolean; 
+  userFiles?: Record<string, S3File[]>; 
+  error?: string 
+}> {
+  try {
+    console.log('📂 Listing all users files from S3...');
+    
+    // First get all users
+    const usersResult = await listAllUsers();
+    if (!usersResult.success || !usersResult.users) {
+      return { success: false, error: usersResult.error || 'Failed to get users' };
+    }
+    
+    // Then get files for each user
+    const userFiles: Record<string, S3File[]> = {};
+    
+    for (const userId of usersResult.users) {
+      const filesResult = await listUserFiles(userId);
+      if (filesResult.success && filesResult.files) {
+        userFiles[userId] = filesResult.files;
+      }
+    }
+    
+    console.log('✅ Loaded files for', Object.keys(userFiles).length, 'users');
+    return { success: true, userFiles };
+    
+  } catch (error) {
+    console.error('❌ Error listing all files:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to list all files',
+    };
+  }
+}
