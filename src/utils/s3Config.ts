@@ -48,27 +48,27 @@ export function getS3Config(): S3Config {
 let s3Client: S3Client | null = null;
 
 export function getS3Client(): S3Client {
-  if (!s3Client) {
-    try {
-      const config = getS3Config();
-      
-      console.log('🔧 Initializing S3 client');
-      console.log('  Region:', config.region);
-      console.log('  Bucket:', config.bucket);
-      console.log('  Access Key:', config.credentials.accessKeyId);
-      console.log('  Secret Key Length:', config.credentials.secretAccessKey.length, 'characters');
-      console.log('  Secret Key First 4 chars:', config.credentials.secretAccessKey.substring(0, 4));
-      
-      s3Client = new S3Client({
-        region: config.region,
-        credentials: config.credentials,
-      });
-    } catch (error) {
-      console.error('Failed to initialize S3 client:', error);
-      throw error;
-    }
+  // Always create a fresh client to avoid credential caching issues
+  try {
+    const config = getS3Config();
+    
+    console.log('🔧 Initializing S3 client');
+    console.log('  Region:', config.region);
+    console.log('  Bucket:', config.bucket);
+    console.log('  Access Key:', config.credentials.accessKeyId);
+    console.log('  Secret Key Length:', config.credentials.secretAccessKey.length, 'characters');
+    console.log('  Secret Key First 4 chars:', config.credentials.secretAccessKey.substring(0, 4));
+    
+    s3Client = new S3Client({
+      region: config.region,
+      credentials: config.credentials,
+    });
+    
+    return s3Client;
+  } catch (error) {
+    console.error('Failed to initialize S3 client:', error);
+    throw error;
   }
-  return s3Client;
 }
 
 // Generate S3 key (path) for organized storage
