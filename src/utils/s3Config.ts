@@ -27,6 +27,12 @@ export function getS3Config(): S3Config {
   const accessKeyId = import.meta.env.VITE_AWS_ACCESS_KEY_ID?.trim();
   const secretAccessKey = import.meta.env.VITE_AWS_SECRET_ACCESS_KEY?.trim();
 
+  console.log('🔍 Raw environment variables:');
+  console.log('  VITE_AWS_REGION:', region);
+  console.log('  VITE_AWS_S3_BUCKET:', bucket);
+  console.log('  VITE_AWS_ACCESS_KEY_ID:', accessKeyId);
+  console.log('  VITE_AWS_SECRET_ACCESS_KEY length:', secretAccessKey?.length);
+
   if (!region || !bucket || !accessKeyId || !secretAccessKey) {
     throw new Error(
       'Missing AWS configuration. Please set VITE_AWS_REGION, VITE_AWS_S3_BUCKET, ' +
