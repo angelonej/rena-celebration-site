@@ -4,6 +4,10 @@ frontend:
     preBuild:
       commands:
         - npm install
+        - echo "VITE_AWS_REGION=$VITE_AWS_REGION" >> .env.production
+        - echo "VITE_AWS_S3_BUCKET=$VITE_AWS_S3_BUCKET" >> .env.production
+        - echo "VITE_AWS_ACCESS_KEY_ID=$VITE_AWS_ACCESS_KEY_ID" >> .env.production
+        - echo "VITE_AWS_SECRET_ACCESS_KEY=$VITE_AWS_SECRET_ACCESS_KEY" >> .env.production
     build:
       commands:
         - npm run build
