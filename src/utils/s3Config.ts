@@ -68,6 +68,7 @@ export function getS3Client(): S3Client {
     s3Client = new S3Client({
       region: config.region,
       credentials: config.credentials,
+      requestChecksumCalculation: 'WHEN_REQUIRED',
     });
     
     return s3Client;
