@@ -29,8 +29,8 @@ const ALLOWED_TYPES = {
   audio: ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/ogg']
 };
 const MAX_FILE_SIZES = {
-  image: 10 * 1024 * 1024,
-  // 10MB
+  image: 25 * 1024 * 1024,
+  // 25MB
   video: 100 * 1024 * 1024,
   // 100MB
   audio: 20 * 1024 * 1024 // 20MB
