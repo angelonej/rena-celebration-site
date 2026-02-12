@@ -93,6 +93,7 @@ export async function uploadToS3(
         Body: file,
         ContentType: contentType,
         Metadata: metadata,
+        ChecksumAlgorithm: 'SHA256',
         // Make files publicly readable (adjust ACL based on your needs)
         // ACL: 'public-read', // Note: ACLs must be enabled on your bucket
       },
