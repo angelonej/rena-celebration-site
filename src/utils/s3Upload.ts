@@ -506,13 +506,15 @@ export async function loadDeletedFilesFromS3(userId: string): Promise<{ success:
 
 /**
  * Load captions from S3 JSON file
+ * @param userId - Can be either raw email (will be sanitized) or already sanitized user ID
  */
 export async function loadCaptionsFromS3(userId: string): Promise<{ success: boolean; captions?: Record<string, string>; error?: string }> {
   try {
     console.log('📖 Loading captions from S3 for user:', userId);
     
     const config = getS3Config();
-    const sanitizedUserId = sanitizeUserId(userId);
+    // Only sanitize if it looks like an email (contains @), otherwise assume it's already sanitized
+    const sanitizedUserId = userId.includes('@') ? sanitizeUserId(userId) : userId;
     
     const captionsKey = `users/${sanitizedUserId}/captions.json`;
     const url = getPublicUrl(config.bucket, config.region, captionsKey);
@@ -523,6 +525,7 @@ export async function loadCaptionsFromS3(userId: string): Promise<{ success: boo
     if (!response.ok) {
       if (response.status === 404) {
         console.log('📝 No captions file found (this is normal for new users)');
+
         return { success: true, captions: {} };
       }
       throw new Error(`Failed to fetch captions: ${response.statusText}`);
