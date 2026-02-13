@@ -11,7 +11,7 @@
  */
 
 import { Upload } from '@aws-sdk/lib-storage';
-import { ListObjectsV2Command, DeleteObjectCommand, HeadObjectCommand, CopyObjectCommand } from '@aws-sdk/client-s3';
+import { ListObjectsV2Command, DeleteObjectCommand, HeadObjectCommand, CopyObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { v4 as uuidv4 } from 'uuid';
 import {
   getS3Client,
@@ -512,29 +512,38 @@ export async function loadCaptionsFromS3(userId: string): Promise<{ success: boo
   try {
     console.log('📖 Loading captions from S3 for user:', userId);
     
+    const s3Client = getS3Client();
     const config = getS3Config();
     // Only sanitize if it looks like an email (contains @), otherwise assume it's already sanitized
     const sanitizedUserId = userId.includes('@') ? sanitizeUserId(userId) : userId;
     
     const captionsKey = `users/${sanitizedUserId}/captions.json`;
-    const url = getPublicUrl(config.bucket, config.region, captionsKey);
     
-    // Fetch the captions file
-    const response = await fetch(url);
+    // Use S3 client to read the file (avoids CORS issues)
+    const command = new GetObjectCommand({
+      Bucket: config.bucket,
+      Key: captionsKey,
+    });
     
-    if (!response.ok) {
-      if (response.status === 404) {
-        console.log('📝 No captions file found (this is normal for new users)');
-
+    try {
+      const response = await s3Client.send(command);
+      const captionsData = await response.Body?.transformToString();
+      
+      if (!captionsData) {
         return { success: true, captions: {} };
       }
-      throw new Error(`Failed to fetch captions: ${response.statusText}`);
+      
+      const captions = JSON.parse(captionsData);
+      console.log('✅ Loaded', Object.keys(captions).length, 'captions from S3');
+      
+      return { success: true, captions };
+    } catch (error: any) {
+      if (error.name === 'NoSuchKey') {
+        console.log('📝 No captions file found (this is normal for new users)');
+        return { success: true, captions: {} };
+      }
+      throw error;
     }
-    
-    const captions = await response.json();
-    console.log('✅ Loaded', Object.keys(captions).length, 'captions from S3');
-    
-    return { success: true, captions };
     
   } catch (error) {
     console.error('❌ Error loading captions:', error);
